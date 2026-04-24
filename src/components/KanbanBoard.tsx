@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { 
   User, Clock, CheckCircle, MessageSquare, Paperclip, Activity, 
-  MoreHorizontal, Edit, AlertCircle, Phone, XCircle, Info, Trash2
+   MoreHorizontal, Edit, AlertCircle, Phone, XCircle, Info, Trash2, ArrowRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Convocacao, StatusConvocacao, STATUS_CONVOCACAO_LABELS } from '@/types/vaga';
@@ -36,13 +36,21 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+ import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+ } from "@/components/ui/select";
+ import {
+   DropdownMenu,
+   DropdownMenuContent,
+   DropdownMenuItem,
+   DropdownMenuLabel,
+   DropdownMenuSeparator,
+   DropdownMenuTrigger,
+ } from "@/components/ui/dropdown-menu";
 import { toast } from 'sonner';
 import { useVagasStore } from '@/store/vagasStore';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -83,12 +91,14 @@ const KanbanColumn = ({ id, title, icon: Icon, count, color, children }: KanbanC
   );
 };
 
-interface KanbanCardProps {
-  convocacao: Convocacao;
-  onEdit: (conv: Convocacao) => void;
-}
-
-const SortableKanbanCard = ({ convocacao, onEdit }: KanbanCardProps) => {
+ interface KanbanCardProps {
+   convocacao: Convocacao;
+   onEdit: (conv: Convocacao) => void;
+   onMove: (conv: Convocacao, targetStatus: StatusConvocacao | 'recusa') => void;
+   columns: any[];
+ }
+ 
+ const SortableKanbanCard = ({ convocacao, onEdit, onMove, columns }: KanbanCardProps) => {
   const {
     attributes,
     listeners,
@@ -115,20 +125,40 @@ const SortableKanbanCard = ({ convocacao, onEdit }: KanbanCardProps) => {
               </h4>
               <span className="text-[11px] text-slate-500 font-medium mt-0.5">{convocacao.cargo}</span>
             </div>
-            <div className="flex gap-1">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-6 px-1.5 text-[9px] font-bold text-slate-400 hover:text-primary gap-0.5"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit(convocacao);
-                }}
-              >
-                <Edit className="h-3 w-3" />
-                <span className="hidden group-hover:inline">Devolutiva</span>
-              </Button>
-            </div>
+             <div className="flex gap-1 items-center">
+               <DropdownMenu>
+                 <DropdownMenuTrigger asChild>
+                   <Button 
+                     variant="ghost" 
+                     size="sm" 
+                     className="h-7 w-7 p-0 text-slate-400 hover:text-primary"
+                     onClick={(e) => e.stopPropagation()}
+                   >
+                     <MoreHorizontal className="h-4 w-4" />
+                   </Button>
+                 </DropdownMenuTrigger>
+                 <DropdownMenuContent align="end" className="w-48">
+                   <DropdownMenuLabel className="text-[10px] font-bold uppercase text-slate-400">Ações</DropdownMenuLabel>
+                   <DropdownMenuItem onClick={() => onEdit(convocacao)}>
+                     <Edit className="h-4 w-4 mr-2" /> Devolutiva
+                   </DropdownMenuItem>
+                   <DropdownMenuSeparator />
+                   <DropdownMenuLabel className="text-[10px] font-bold uppercase text-slate-400">Mover para</DropdownMenuLabel>
+                   {columns.map(col => {
+                     const isCurrent = convocacao.status === col.id || 
+                                     (['recusa_plantao', 'recusa_unidade', 'recusa_horario'].includes(convocacao.status) && col.id === 'recusa');
+                     if (isCurrent) return null;
+                     
+                     const Icon = col.icon;
+                     return (
+                       <DropdownMenuItem key={col.id} onClick={() => onMove(convocacao, col.id as any)}>
+                         <Icon className="h-4 w-4 mr-2" /> {col.title}
+                       </DropdownMenuItem>
+                     );
+                   })}
+                 </DropdownMenuContent>
+               </DropdownMenu>
+             </div>
           </div>
 
           <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
@@ -311,16 +341,26 @@ export function KanbanBoard({ convocacoes: initialConvocacoes }: KanbanBoardProp
               items={getItemsForColumn(col.id).map(c => c.id)}
               strategy={verticalListSortingStrategy}
             >
-              {getItemsForColumn(col.id).map(conv => (
-                <SortableKanbanCard 
-                  key={conv.id} 
-                  convocacao={conv} 
-                  onEdit={(c) => {
-                    setEditingConvocacao(c);
-                    setIsEditModalOpen(true);
-                  }}
-                />
-              ))}
+               {getItemsForColumn(col.id).map(conv => (
+                 <SortableKanbanCard 
+                   key={conv.id} 
+                   convocacao={conv} 
+                   columns={columns}
+                   onEdit={(c) => {
+                     setEditingConvocacao(c);
+                     setIsEditModalOpen(true);
+                   }}
+                   onMove={(c, target) => {
+                     setMovingConvocacao(c);
+                     setTargetStatus(target);
+                     setMoveDetails({
+                       recusaType: 'recusa_plantao',
+                       observations: ''
+                     });
+                     setIsMoveDialogOpen(true);
+                   }}
+                 />
+               ))}
             </SortableContext>
             {getItemsForColumn(col.id).length === 0 && (
               <div className="h-24 flex items-center justify-center border-2 border-dashed border-slate-200 rounded-lg text-slate-400 text-xs italic">
